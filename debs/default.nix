@@ -1,9 +1,9 @@
 { lib, fetchurl }:
 
 let
-  debsJSON = lib.importJSON ./r35.1.json;
+  debsJSON = lib.importJSON ./r32.4.json;
   baseURL = "https://repo.download.nvidia.com/jetson";
-  repos = [ "t194" "t234" "common" ];
+  repos = [ "T186" "common"];
 
   fetchDeb = repo: pkg: fetchurl {
     url = "${baseURL}/${repo}/${pkg.filename}";

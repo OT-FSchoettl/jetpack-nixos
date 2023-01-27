@@ -11,16 +11,19 @@ let
   # https://developer.nvidia.com/embedded/jetson-linux-archive
   # https://repo.download.nvidia.com/jetson/
 
-  src = fetchurl {
-    url = "https://developer.nvidia.com/embedded/l4t/r35_release_v1.0/release/jetson_linux_r35.1.0_aarch64.tbz2";
+  jetpackVersion = "4.4.1";
+  l4tVersion = "32.4.4";  
+  cudaVersion = "10.2";
+
+  l_l4tVersion = builtins.splitVersion l4tVersion;
+  src = fetchurl (with builtins; { 
+    url = "https://developer.nvidia.com/embedded/l4t/r${elemAt l_l4tVersion 0}_release_v${elemAt l_l4tVersion 1}.${elemAt l_l4tVersion 2}/release/jetson_linux_r${l4tVersion}_aarch64.tbz2";
     sha256 = "sha256-ZwAh9qKIuOqRb9QIn73emrjdUAPyMHmq9DlCSzXeRUw=";
-  };
+  });
 
   debs = import ./debs { inherit lib fetchurl; };
 
-  jetpackVersion = "5.0.2";
-  l4tVersion = "35.1.0";
-  cudaVersion = "11.4";
+  
 
   # we use a more recent version of bzip2 here because we hit this bug extracting nvidia's archives:
   # https://bugs.launchpad.net/ubuntu/+source/bzip2/+bug/1834494
