@@ -1,5 +1,6 @@
 { lib,
   stdenv,
+  stdenvNoCC,
   runCommand,
   dpkg,
   makeWrapper,
@@ -11,17 +12,21 @@
   pkg-config,
   substituteAll,
   gcc8,
+  gcc9,
   gcc10,
+  gcc11,
   l4t,
 
   debs,
   cudaVersion,
+
+  pkgs,
 }:
 
 let
   # We should use gcc10 to match CUDA 11.4, but we get link errors on opencv and torch2trt if we do
   # ../../lib/libopencv_core.so.4.5.4: undefined reference to `__aarch64_ldadd4_acq_rel
-  gccForCuda = gcc8;
+  gccForCuda = builtins.trace (stdenv.cc.cc.lib.lib + "/aarch64-unknown-linux-gnu/lib") pkgs.stdenv.cc;
 
   cudaVersionDashes = lib.replaceStrings [ "." ] [ "-"] cudaVersion;
 
@@ -38,7 +43,7 @@ let
       inherit version srcs;
 
       nativeBuildInputs = [ dpkg autoPatchelfHook autoAddOpenGLRunpathHook ] ++ nativeBuildInputs;
-      buildInputs = [ stdenv.cc.cc.lib ] ++ buildInputs;
+      buildInputs = [ "${toString (stdenv.cc.cc.lib.lib + "/aarch64-unknown-linux-gnu")}" ] ++ buildInputs;
 
       unpackCmd = "for src in $srcs; do dpkg-deb -x $src source; done";
 
@@ -46,6 +51,10 @@ let
       dontBuild = true;
       noDumpEnvVars = true;
 
+      prePatch = ''
+        env
+        ls *
+      '';
       postPatch = ''
         if [[ -d usr ]]; then
           cp -r usr/. .
@@ -174,7 +183,7 @@ let
 
     cublas = buildFromSourcePackage { name = "cublas"; };
     cudnn = buildFromSourcePackage { name = "cudnn"; };
-    cuda = buildFromSourcePackage { name = "cuda"; 
+    cuda = buildFromSourcePackage { name = "cuda";
       buildInputs = [ expat ncurses5 ];
       preFixup = ''
         # Some build systems look for libcuda.so.1 expliticly:
@@ -189,10 +198,10 @@ let
       version = cudaVersion;
       paths = with cudaPackages; [
         cuda cudnn cublas
-        #cuda_cccl cuda_cudart cuda_cuobjdump cuda_cupti 
-        #cuda_cuxxfilt cuda_documentation 
+        #cuda_cccl cuda_cudart cuda_cuobjdump cuda_cupti
+        #cuda_cuxxfilt cuda_documentation
         #cuda_gdb cuda_nvcc cuda_nvdisasm cuda_nvml_dev
-        #cuda_nvprune cuda_nvrtc cuda_nvtx 
+        #cuda_nvprune cuda_nvrtc cuda_nvtx
         #cuda_sanitizer_api libcublas
         #libcufft libcurand libcusolver libcusparse libnpp
       ];
@@ -207,7 +216,7 @@ let
         echo "cmakeFlags+=' -DCUDA_HOST_COMPILER=${gccForCuda}/bin'" >> $out/nix-support/setup-hook
       '';
     } // {
-      cc = gccForCuda;
+      #cc = gccForCuda;
       majorMinorVersion = lib.versions.majorMinor cudaVersion;
       majorVersion = lib.versions.majorMinor cudaVersion;
     });
