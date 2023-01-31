@@ -26,11 +26,11 @@
 let
   # We should use gcc10 to match CUDA 11.4, but we get link errors on opencv and torch2trt if we do
   # ../../lib/libopencv_core.so.4.5.4: undefined reference to `__aarch64_ldadd4_acq_rel
-  gccForCuda = builtins.trace (stdenv.cc.cc.lib.lib + "/aarch64-unknown-linux-gnu/lib") pkgs.stdenv.cc;
+  gccForCuda = pkgs.stdenv.cc;
 
   cudaVersionDashes = lib.replaceStrings [ "." ] [ "-"] cudaVersion;
 
-  debsForSourcePackage = lib.traceSeq (builtins.map (pkg: pkg.source or "") (builtins.attrValues debs.common)) (srcPackageName: lib.filter (pkg: (pkg.source or "") == srcPackageName) (builtins.attrValues debs.common));
+  debsForSourcePackage = lib.traceSeq (builtins.map (pkg: pkg or "") (builtins.attrValues debs.common)) (srcPackageName: lib.filter (pkg: (pkg.source or "") == srcPackageName) (builtins.attrValues debs.common));
 
   # TODO: Fix the pkg-config files
   buildFromDebs =
