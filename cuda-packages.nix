@@ -216,7 +216,7 @@ let
         echo "cmakeFlags+=' -DCUDA_HOST_COMPILER=${gccForCuda}/bin'" >> $out/nix-support/setup-hook
       '';
     } // {
-      #cc = gccForCuda;
+      cc = gccForCuda;
       majorMinorVersion = lib.versions.majorMinor cudaVersion;
       majorVersion = lib.versions.majorMinor cudaVersion;
     });
