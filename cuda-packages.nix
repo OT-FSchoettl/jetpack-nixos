@@ -30,7 +30,7 @@ let
 
   cudaVersionDashes = lib.replaceStrings [ "." ] [ "-"] cudaVersion;
 
-  debsForSourcePackage = lib.traceSeq (builtins.map (pkg: pkg or "") (builtins.attrValues debs.common)) (srcPackageName: lib.filter (pkg: (pkg.source or "") == srcPackageName) (builtins.attrValues debs.common));
+  debsForSourcePackage = srcPackageName: lib.filter (pkg: (pkg.source or "") == srcPackageName) (builtins.attrValues debs.common);
 
   # TODO: Fix the pkg-config files
   buildFromDebs =
