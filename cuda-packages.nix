@@ -1,4 +1,5 @@
-{ lib,
+{ pkgs,
+  lib,
   stdenv,
   runCommand,
   dpkg,
@@ -20,7 +21,7 @@
 let
   # We should use gcc10 to match CUDA 11.4, but we get link errors on opencv and torch2trt if we do
   # ../../lib/libopencv_core.so.4.5.4: undefined reference to `__aarch64_ldadd4_acq_rel
-  gccForCuda = gcc9;
+  gccForCuda = pkgs.stdenv.cc;
 
   cudaVersionDashes = lib.replaceStrings [ "." ] [ "-"] cudaVersion;
 
@@ -37,7 +38,7 @@ let
       inherit version srcs;
 
       nativeBuildInputs = [ dpkg autoPatchelfHook autoAddOpenGLRunpathHook ] ++ nativeBuildInputs;
-      buildInputs = [ stdenv.cc.cc.lib ] ++ buildInputs;
+      buildInputs = [ "${toString (stdenv.cc.cc.lib.lib + "/aarch64-unknown-linux-gnu")}" ] ++ buildInputs;
 
       unpackCmd = "for src in $srcs; do dpkg-deb -x $src source; done";
 
