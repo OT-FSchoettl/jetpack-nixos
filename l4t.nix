@@ -90,9 +90,10 @@ let
     # Re-add needed paths to RPATH
     autoPatchelf = false;
     postFixup = ''
-      for lib in $(find "$out/lib" -name '*.so*'); do
+      for lib in $(find "$out/lib" -name '*.so*' -type f); do
         patchelf $lib --set-rpath $out/lib:${lib.makeLibraryPath [ l4t-core libglvnd egl-wayland xorg.libX11 xorg.libXext ]}
       done
+      ln -s $out/lib/libnvidia-fatbinaryloader.so.32.4.4 $out/lib/libnvidia-fatbinaryloader.so.440.18
     '';
   };
 
