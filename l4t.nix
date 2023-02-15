@@ -10,7 +10,7 @@ let
     # Nicely, the t194 and t234 packages are currently identical, so we just
     # use t194. No guarantee that will stay the same in the future, so we
     # should consider choosing the right package set based on the SoC.
-    { name, src ? debs.t234.${name}.src, version ? debs.t234.${name}.version,
+    { name, src ? debs.t194.${name}.src, version ? debs.t194.${name}.version,
       sourceRoot ? "source", nativeBuildInputs ? [], autoPatchelf ? true, postPatch ? "", ...
     }@args:
     stdenvNoCC.mkDerivation ((lib.filterAttrs (n: v: !(builtins.elem n [ "name" "autoPatchelf" ])) args) // {
@@ -99,7 +99,7 @@ let
   # CUDA driver
   l4t-cuda = buildFromDeb {
     name = "nvidia-l4t-cuda";
-    buildInputs = [ l4t-core ];
+    buildInputs = [ l4t-core l4t-3d-core ];
     postPatch = ''
       # Additional libcuda symlinks
       ln -sf libcuda.so.1.1 lib/libcuda.so.1
@@ -155,7 +155,7 @@ let
     name = "nvidia-l4t-multimedia";
     # TODO: Replace the below with the builder from cuda-packages that works with multiple debs
     postUnpack = ''
-      dpkg-deb -x ${debs.t234.nvidia-l4t-multimedia-utils.src} source
+      dpkg-deb -x ${debs.t194.nvidia-l4t-multimedia-utils.src} source
       dpkg-deb -x ${debs.common.nvidia-l4t-jetson-multimedia-api.src} source
     '';
     buildInputs = [ l4t-core l4t-cuda l4t-nvsci pango alsa-lib ] ++ (with gst_all_1; [ gstreamer gst-plugins-base ]);

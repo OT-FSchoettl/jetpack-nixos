@@ -22,18 +22,18 @@ def fetch_debs(url):
         pkg_strings = file.read().decode().strip().split('\n\n')
 
         for pkg_string in pkg_strings:
-            
+
             package = re.search(r'^Package: (.*)$', pkg_string, re.MULTILINE).group(1)
             version = re.search(r'^Version: (.*)$', pkg_string, re.MULTILINE).group(1)
             filename = re.search(r'^Filename: (.*)$', pkg_string, re.MULTILINE).group(1)
             sha256 = re.search(r'^SHA256: (.*)$', pkg_string, re.MULTILINE).group(1)
             description = re.search(r'^Description: (.*)$', pkg_string, re.MULTILINE).group(1)
-            
+
             # "pool/main/c/cuda/cuda-cudart-dev-10-2_10.2.89-1_arm64.deb",
             # m_source = re.search(r'^Filename: .*/(cuda\-.*?)\-.*\.deb$', pkg_string, re.MULTILINE)
             # if m_source is None:
             #     m_source = re.search(r'^Source: (.*)$', pkg_string, re.MULTILINE)
-            
+
             m_source = re.search(r'^Source: (.*)$', pkg_string, re.MULTILINE)
 
 
