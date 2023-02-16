@@ -1,6 +1,5 @@
 { lib,
   stdenv,
-  stdenvNoCC,
   runCommand,
   dpkg,
   makeWrapper,
@@ -11,22 +10,16 @@
   ncurses5,
   pkg-config,
   substituteAll,
-  gcc8,
-  gcc9,
-  gcc10,
-  gcc11,
   l4t,
 
   debs,
   cudaVersion,
-
-  pkgs,
 }:
 
 let
   # We should use gcc10 to match CUDA 11.4, but we get link errors on opencv and torch2trt if we do
   # ../../lib/libopencv_core.so.4.5.4: undefined reference to `__aarch64_ldadd4_acq_rel
-  gccForCuda = pkgs.stdenv.cc;
+  gccForCuda = stdenv.cc;
 
   cudaVersionDashes = lib.replaceStrings [ "." ] [ "-"] cudaVersion;
 
@@ -43,7 +36,11 @@ let
       inherit version srcs;
 
       nativeBuildInputs = [ dpkg autoPatchelfHook autoAddOpenGLRunpathHook ] ++ nativeBuildInputs;
-      buildInputs = [ "${toString (stdenv.cc.cc.lib.lib + "/aarch64-unknown-linux-gnu")}" ] ++ buildInputs;
+       buildInputs =
+         (if stdenv.system == "aarch64-linux"
+         then [ "${toString (stdenv.cc.cc.lib.lib + "/aarch64-unknown-linux-gnu")}" ]
+         else []
+         ) ++ buildInputs;
 
       unpackCmd = "for src in $srcs; do dpkg-deb -x $src source; done";
 
@@ -51,10 +48,6 @@ let
       dontBuild = true;
       noDumpEnvVars = true;
 
-      prePatch = ''
-        env
-        ls *
-      '';
       postPatch = ''
         if [[ -d usr ]]; then
           cp -r usr/. .
@@ -112,75 +105,11 @@ let
   buildFromSourcePackage = { name, ...}@args: buildFromDebs ({
     inherit name;
     # Just using the first package for the version seems fine
-    version = builtins.trace name (lib.head (debsForSourcePackage name)).version;
+    version = (lib.head (debsForSourcePackage name)).version;
     srcs = builtins.map (deb: deb.src) (debsForSourcePackage name);
   } // args);
 
   cudaPackages = {
-    #cuda_cccl = buildFromSourcePackage { name = "cuda-thrust"; };
-    # cuda_cudart = buildFromSourcePackage {
-    #   name = "cuda-cudart";
-    #   # preFixup = ''
-    #   #   # Some build systems look for libcuda.so.1 expliticly:
-    #   #   ln -s $out/lib/stubs/libcuda.so $out/lib/stubs/libcuda.so.1
-    #   # '';
-    # };
-    # cuda_cuobjdump = buildFromSourcePackage { name = "cuda-cuobjdump"; };
-    # cuda_cupti = buildFromSourcePackage { name = "cuda-cupti"; };
-    # #cuda_cuxxfilt = buildFromSourcePackage { name = "cuda-cuxxfilt"; };
-    # cuda_documentation = buildFromSourcePackage { name = "cuda-documentation"; };
-    # #cuda_gdb = buildFromSourcePackage { name = "cuda-gdb"; buildInputs = [ expat ]; };
-    # cuda_nvcc = buildFromSourcePackage {
-    #   name = "cuda-nvcc";
-    #   nativeBuildInputs = [ makeWrapper ];
-    #   # Fixes from upstream nixpkgs cudatoolkit
-    #   postFixup = ''
-    #     # Set compiler for NVCC.
-    #     wrapProgram $out/bin/nvcc \
-    #       --prefix PATH : ${gccForCuda}/bin
-
-    #     # Change the #error on recent GCC/Clang to a #warning
-    #     sed -i $out/include/crt/host_config.h \
-    #       -e 's/#error\(.*unsupported GNU version\)/#warning\1/' \
-    #       -e 's/#error\(.*unsupported clang version\)/#warning\1/'
-    #   '';
-    # };
-    # cuda_nvdisasm = buildFromSourcePackage { name = "cuda-nvdisasm"; };
-    # cuda_nvml_dev = buildFromSourcePackage { name = "cuda-nvml"; };
-    # cuda_nvprune = buildFromSourcePackage { name = "cuda-nvprune"; };
-    # cuda_nvrtc = buildFromSourcePackage { name = "cuda-nvrtc"; };
-    # cuda_nvtx = buildFromSourcePackage { name = "cuda-nvtx"; };
-    # # cuda_sanitizer_api = buildFromDebs {
-    # #   # There are 11-4 and 11-7 versions in the deb repo, and we only want one for now.
-    # #   name = "cuda-sanitizer-api";
-    # #   version = debs.common."cuda-sanitizer-${cudaVersionDashes}".version;
-    # #   srcs = [ debs.common."cuda-sanitizer-${cudaVersionDashes}".src ];
-    # # };
-    # cuda_profiler_api = buildFromSourcePackage { name = "cuda-profiler-api"; };
-    # cudnn = buildFromSourcePackage {
-    #   name = "cudnn";
-    #   buildInputs = with cudaPackages; [ libcublas ];
-    #   # Unclear how it's supposed to work normally if all header files use
-    #   # _v8.h suffix, since they refer to each other via #includes without any
-    #   # suffix. Just symlink them all here
-    #   postPatch = ''
-    #     for filepath in $(find include/ -name '*_v8.h'); do
-    #       ln -s $(basename $filepath) ''${filepath%_v8.h}.h
-    #     done
-    #   '';
-    #   # Without --add-needed autoPatchelf forgets $ORIGIN
-    #   postFixup = ''
-    #     patchelf $out/lib/libcudnn.so --add-needed libcudnn_cnn_infer.so
-    #   '';
-    # };
-    # libcublas = buildFromSourcePackage { name = "cublas"; };
-    # libcufft = buildFromSourcePackage { name = "cuda-cufft"; };
-    # libcurand = buildFromSourcePackage { name = "cuda-curand"; };
-    # libcusolver = buildFromSourcePackage { name = "cuda-cusolver"; buildInputs = [ cudaPackages.libcublas ]; };
-    # libcusparse = buildFromSourcePackage { name = "cuda-cusparse"; };
-    # libnpp = buildFromSourcePackage { name = "cuda-npp"; };
-    #nsight_compute = buildFromSourcePackage { name = "nsight-compute"; };
-
     cublas = buildFromSourcePackage { name = "cublas"; };
     cudnn = buildFromSourcePackage { name = "cudnn"; };
     cuda = buildFromSourcePackage { name = "cuda";
@@ -198,12 +127,6 @@ let
       version = cudaVersion;
       paths = with cudaPackages; [
         cuda cudnn cublas
-        #cuda_cccl cuda_cudart cuda_cuobjdump cuda_cupti
-        #cuda_cuxxfilt cuda_documentation
-        #cuda_gdb cuda_nvcc cuda_nvdisasm cuda_nvml_dev
-        #cuda_nvprune cuda_nvrtc cuda_nvtx
-        #cuda_sanitizer_api libcublas
-        #libcufft libcurand libcusolver libcusparse libnpp
       ];
       # Bits from upstream nixpkgs cudatoolkit
       postBuild = ''
