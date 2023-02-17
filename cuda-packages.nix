@@ -14,6 +14,7 @@
 
   debs,
   cudaVersion,
+  l4tVersion,
 }:
 
 let
@@ -23,11 +24,11 @@ let
 
   cudaVersionDashes = lib.replaceStrings [ "." ] [ "-"] cudaVersion;
 
-  debsForSourcePackage = srcPackageName: lib.filter (pkg: (pkg.source or "") == srcPackageName) (builtins.attrValues debs.common);
+  debsForSourcePackage = srcPackageName: repo: lib.filter (pkg: (pkg.source or "") == srcPackageName) (builtins.attrValues debs."${repo}");
 
   # TODO: Fix the pkg-config files
   buildFromDebs =
-    { name, srcs, version ? debs.common.${name}.version,
+    { name, srcs, repo ? "common", version ? debs.${repo}.${name}.version,
       sourceRoot ? "source", buildInputs ? [], nativeBuildInputs ? [],
       postPatch ? "", postFixup ? "", autoPatchelf ? true, ...
     }@args:
@@ -102,32 +103,121 @@ let
 
   # Combine all the debs that originated from the same source package and build
   # from that
-  buildFromSourcePackage = { name, ...}@args: buildFromDebs ({
-    inherit name;
+  buildFromSourcePackage = { name, repo ? "common", ...}@args: buildFromDebs ({
+    inherit name repo;
     # Just using the first package for the version seems fine
-    version = (lib.head (debsForSourcePackage name)).version;
-    srcs = builtins.map (deb: deb.src) (debsForSourcePackage name);
+    version = (lib.head (debsForSourcePackage name repo)).version;
+    srcs = builtins.map (deb: deb.src) (debsForSourcePackage name repo);
   } // args);
 
-  cudaPackages = {
-    cublas = buildFromSourcePackage { name = "cublas"; };
-    cudnn = buildFromSourcePackage { name = "cudnn"; };
-    cuda = buildFromSourcePackage { name = "cuda";
-      buildInputs = [ expat ncurses5 ];
-      preFixup = ''
-        # Some build systems look for libcuda.so.1 expliticly:
-        ln -s $out/lib/stubs/libcuda.so $out/lib/stubs/libcuda.so.1
-      '';
-    };
 
+  cudaSubpackages =
+    if (lib.versions.major l4tVersion) == "32" then rec {
+      cublas = buildFromSourcePackage { name = "cublas"; };
+      cudnn = buildFromSourcePackage { name = "cudnn"; };
+      cuda = buildFromSourcePackage { name = "cuda";
+        buildInputs = [ expat ncurses5 ];
+        preFixup = ''
+          # Some build systems look for libcuda.so.1 expliticly:
+          ln -s $out/lib/stubs/libcuda.so $out/lib/stubs/libcuda.so.1
+        '';
+      };
+      cuda_cudart = cuda;
+      cuda_cuobjdump = cuda;
+      cuda_cupti = cuda;
+      cuda_documentation = cuda;
+      cuda_gdb = cuda;
+      cuda_nvcc = cuda;
+      cuda_nvdisasm = cuda;
+      cuda_nvml_dev = cuda;
+      cuda_nvprune = cuda;
+      cuda_nvrtc = cuda;
+      cuda_nvtx = cuda;
+      libcufft = cuda;
+      libcurand = cuda;
+      libcusolver = cuda;
+      libcusparse = cuda;
+      libnpp = cuda;
+
+      libcublas = cublas;
+
+      # Can't find those for R32.4
+      # cuda_cccl
+      # cuda_cuxxfilt
+    } else if (lib.versions.major l4tVersion) == "35" then rec {
+      cuda_cccl = buildFromSourcePackage { name = "cuda-thrust"; };
+      cuda_cudart = buildFromSourcePackage {
+        name = "cuda-cudart";
+        preFixup = ''
+          # Some build systems look for libcuda.so.1 expliticly:
+          ln -s $out/lib/stubs/libcuda.so $out/lib/stubs/libcuda.so.1
+        '';
+      };
+      cuda_cuobjdump = buildFromSourcePackage { name = "cuda-cuobjdump"; };
+      cuda_cupti = buildFromSourcePackage { name = "cuda-cupti"; };
+      cuda_cuxxfilt = buildFromSourcePackage { name = "cuda-cuxxfilt"; };
+      cuda_documentation = buildFromSourcePackage { name = "cuda-documentation"; };
+      cuda_gdb = buildFromSourcePackage { name = "cuda-gdb"; buildInputs = [ expat ]; };
+      cuda_nvcc = buildFromSourcePackage {
+        name = "cuda-nvcc";
+        nativeBuildInputs = [ makeWrapper ];
+        # Fixes from upstream nixpkgs cudatoolkit
+        postFixup = ''
+          # Set compiler for NVCC.
+          wrapProgram $out/bin/nvcc \
+            --prefix PATH : ${gccForCuda}/bin
+
+          # Change the #error on recent GCC/Clang to a #warning
+          sed -i $out/include/crt/host_config.h \
+            -e 's/#error\(.*unsupported GNU version\)/#warning\1/' \
+            -e 's/#error\(.*unsupported clang version\)/#warning\1/'
+        '';
+      };
+      cuda_nvdisasm = buildFromSourcePackage { name = "cuda-nvdisasm"; };
+      cuda_nvml_dev = buildFromSourcePackage { name = "cuda-nvml-dev"; };
+      cuda_nvprune = buildFromSourcePackage { name = "cuda-nvprune"; };
+      cuda_nvrtc = buildFromSourcePackage { name = "cuda-nvrtc"; };
+      cuda_nvtx = buildFromSourcePackage { name = "cuda-nvtx"; };
+      cuda_sanitizer_api = buildFromDebs {
+        # There are 11-4 and 11-7 versions in the deb repo, and we only want one for now.
+        name = "cuda-sanitizer-api";
+        version = debs.common."cuda-sanitizer-${cudaVersionDashes}".version;
+        srcs = [ debs.common."cuda-sanitizer-${cudaVersionDashes}".src ];
+      };
+      cuda_profiler_api = buildFromSourcePackage { name = "cuda-profiler-api"; };
+      cudnn = buildFromSourcePackage {
+        name = "cudnn";
+        buildInputs = [ libcublas ];
+        # Unclear how it's supposed to work normally if all header files use
+        # _v8.h suffix, since they refer to each other via #includes without any
+        # suffix. Just symlink them all here
+        postPatch = ''
+          for filepath in $(find include/ -name '*_v8.h'); do
+            ln -s $(basename $filepath) ''${filepath%_v8.h}.h
+          done
+        '';
+        # Without --add-needed autoPatchelf forgets $ORIGIN
+        postFixup = ''
+          patchelf $out/lib/libcudnn.so --add-needed libcudnn_cnn_infer.so
+        '';
+      };
+      libcublas = buildFromSourcePackage { name = "libcublas"; };
+      libcufft = buildFromSourcePackage { name = "libcufft"; };
+      libcurand = buildFromSourcePackage { name = "libcurand"; };
+      libcusolver = buildFromSourcePackage { name = "libcusolver"; buildInputs = [ libcublas ]; };
+      libcusparse = buildFromSourcePackage { name = "libcusparse"; };
+      libnpp = buildFromSourcePackage { name = "libnpp"; };
+      #nsight_compute = buildFromSourcePackage { name = "nsight-compute"; };
+    } else {}
+  ;
+
+  cudaPackages = cudaSubpackages // {
     # Combined package. We construct it from the debs, since nvidia doesn't
     # distribute a combined cudatoolkit package for jetson
     cudatoolkit = (symlinkJoin {
       name = "cudatoolkit";
       version = cudaVersion;
-      paths = with cudaPackages; [
-        cuda cudnn cublas
-      ];
+      paths = builtins.attrValues cudaSubpackages;
       # Bits from upstream nixpkgs cudatoolkit
       postBuild = ''
         # Ensure that cmake can find CUDA.
@@ -155,15 +245,21 @@ let
     # (mnist.onnx is from libnvinfer-samples deb)
     # TODO: This package is too large to want to just combine everything. Maybe split back into lib/dev/bin subpackages?
     tensorrt = let
+      tensorrt_repo =
+        if (lib.versions.major l4tVersion) == "32" then
+          "t186"
+        else
+          "common"
+      ;
       # Filter out samples. They're too big
-      tensorrtDebs = builtins.filter (p: !(lib.hasInfix "libnvinfer-samples" p.filename)) (debsForSourcePackage "tensorrt");
+      tensorrtDebs = builtins.filter (p: !(lib.hasInfix "libnvinfer-samples" p.filename)) (debsForSourcePackage "tensorrt" tensorrt_repo);
     in buildFromDebs {
       name = "tensorrt";
       # Just using the first package for the version seems fine
       version = (lib.head tensorrtDebs).version;
       srcs = builtins.map (deb: deb.src) tensorrtDebs;
 
-      buildInputs = (with cudaPackages; [ cuda_cudart libcublas cudnn ]) ++ (with l4t; [ l4t-core l4t-multimedia ]);
+      buildInputs = (with cudaSubpackages; [ cuda_cudart libcublas cudnn ]) ++ (with l4t; [ l4t-core l4t-multimedia ]);
       # Remove unnecessary (and large) static libs
       postPatch = ''
         rm -rf lib/*.a
@@ -186,7 +282,7 @@ let
       srcs = [ debs.common.libnvvpi2.src debs.common.vpi2-dev.src ];
       sourceRoot = "source/opt/nvidia/vpi2";
       buildInputs = (with l4t; [ l4t-core l4t-cuda l4t-nvsci l4t-3d-core l4t-multimedia l4t-pva ])
-        ++ (with cudaPackages; [ libcufft ]);
+        ++ (with cudaSubpackages; [ libcufft ]);
       patches = [ ./vpi2.patch ];
       postPatch = ''
         rm -rf etc

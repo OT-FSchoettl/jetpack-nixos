@@ -1,9 +1,18 @@
-{ lib, fetchurl }:
+{
+  lib,
+  fetchurl,
+
+  l4tVersion,
+}:
 
 let
-  debsJSON = lib.importJSON ./r32.4.json;
+  debsJSON = lib.importJSON (./r + "${lib.versions.major l4tVersion}.${lib.versions.minor l4tVersion}.json");
   baseURL = "https://repo.download.nvidia.com/jetson";
-  repos = [ "T186" "common"];
+  repos = [ "common" ] ++ (
+    if lib.version.major l4tVersion == "32" then ["T186"]
+    else if lib.version.major l4tVersion == "35" then ["t194" "t234"]
+    else []
+  );
 
   fetchDeb = repo: pkg: fetchurl {
     url = "${baseURL}/${repo}/${pkg.filename}";

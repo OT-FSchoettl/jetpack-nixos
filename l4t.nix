@@ -157,9 +157,9 @@ let
     # TODO: Replace the below with the builder from cuda-packages that works with multiple debs
     postUnpack = ''
       dpkg-deb -x ${debs.t194.nvidia-l4t-multimedia-utils.src} source
-      dpkg-deb -x ${debs.common.nvidia-l4t-jetson-multimedia-api.src} source
+      dpkg-deb -x ${debs.t194.nvidia-l4t-jetson-multimedia-api.src} source
     '';
-    buildInputs = [ l4t-core l4t-cuda l4t-nvsci pango alsa-lib ] ++ (with gst_all_1; [ gstreamer gst-plugins-base ]);
+    buildInputs = [ l4t-core l4t-cuda pango alsa-lib ] ++ (with gst_all_1; [ gstreamer gst-plugins-base ]);
 
     patches = [
       (fetchpatch {

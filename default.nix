@@ -1,7 +1,9 @@
 { callPackage, callPackages, stdenv, stdenvNoCC, lib, runCommand, fetchurl,
   autoPatchelfHook, bzip2_1_1, writeShellScriptBin, pkgs, dtc,
+  jetpackVersion ? "5.0.2",
+  l4tVersion ? "35.1.0",
+  cudaVersion ? "11.4",
 }:
-
 let
   # Grab this from nixpkgs cudaPackages
   inherit (pkgs.cudaPackages) autoAddOpenGLRunpathHook;
@@ -11,19 +13,15 @@ let
   # https://developer.nvidia.com/embedded/jetson-linux-archive
   # https://repo.download.nvidia.com/jetson/
 
-  jetpackVersion = "4.4.1";
-  l4tVersion = "32.4.4";  
-  cudaVersion = "10.2";
-
   l_l4tVersion = builtins.splitVersion l4tVersion;
-  src = fetchurl (with builtins; { 
+  src = fetchurl (with builtins; {
     url = "https://developer.nvidia.com/embedded/l4t/r${elemAt l_l4tVersion 0}_release_v${elemAt l_l4tVersion 1}.${elemAt l_l4tVersion 2}/release/jetson_linux_r${l4tVersion}_aarch64.tbz2";
     sha256 = "sha256-ZwAh9qKIuOqRb9QIn73emrjdUAPyMHmq9DlCSzXeRUw=";
   });
 
-  debs = import ./debs { inherit lib fetchurl; };
+  debs = pkgs.callPackage ./debs { inherit l4tVersion; };
 
-  
+
 
   # we use a more recent version of bzip2 here because we hit this bug extracting nvidia's archives:
   # https://bugs.launchpad.net/ubuntu/+source/bzip2/+bug/1834494
@@ -53,7 +51,7 @@ let
 
   l4t = callPackages ./l4t.nix { inherit debs l4tVersion; };
 
-  cudaPackages = callPackages ./cuda-packages.nix { inherit debs cudaVersion autoAddOpenGLRunpathHook l4t; };
+  cudaPackages = callPackages ./cuda-packages.nix { inherit debs cudaVersion l4tVersion autoAddOpenGLRunpathHook l4t; };
 
   samples = callPackages ./samples.nix { inherit debs cudaVersion autoAddOpenGLRunpathHook l4t cudaPackages; };
 
